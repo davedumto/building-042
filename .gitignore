@@ -1,6 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ---------- dependencies ----------
 /node_modules
 /.pnp
 .pnp.*
@@ -10,32 +10,56 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# ---------- testing ----------
 /coverage
 
-# next.js
+# ---------- next.js ----------
 /.next/
 /out/
 
-# production
+# ---------- production build ----------
 /build
+/dist
 
-# misc
-.DS_Store
-*.pem
+# ---------- env / secrets ----------
+# Ignore all env files EXCEPT the committed template (.env.example).
+.env
+.env.*
+!.env.example
 
-# debug
+# ---------- prisma ----------
+# Generated client + local db/migration artifacts should not be committed.
+/prisma/generated
+/prisma/*.db
+/prisma/*.db-journal
+
+# ---------- logs ----------
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+logs
 
-# env files (can opt-in for committing if needed)
-.env*
+# ---------- misc / OS ----------
+.DS_Store
+Thumbs.db
+*.pem
 
-# vercel
+# ---------- editors / IDEs ----------
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+
+# ---------- vercel ----------
 .vercel
 
-# typescript
+# ---------- typescript ----------
 *.tsbuildinfo
 next-env.d.ts
+
+# ---------- claude / local tooling ----------
+.claude/
+CLAUDE.local.md

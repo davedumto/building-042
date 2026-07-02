@@ -1,0 +1,100 @@
+// The Enugu Creative Movement — data model
+// Funnel: CAPTURE (lead saved instantly) -> QUALIFY (quiz) -> ROUTE -> NURTURE
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A captured lead. The row is created the instant we have contact info
+// (name + whatsapp + email), BEFORE the quiz — so quiz-abandoners are
+// still real leads. persona is filled in after the quiz completes.
+model Lead {
+  id        String   @id @default(cuid())
+
+  // Signature motif: sequential "Builder No. 0042 / Enugu".
+  // Auto-increment so the public counter toward the 300 cap is trustworthy.
+  builderNo Int      @unique @default(autoincrement())
+
+  // --- Captured contact (required at CAPTURE) ---
+  name      String
+  whatsapp  String
+  email     String   @unique
+
+  // --- Qualification (set at QUALIFY) ---
+  persona       String?  // DESIGNER | FASHION_ENTREPRENEUR | FOUNDER | STUDENT | CONTENT_CREATOR | MARKETER | EXPLORER
+  campus        String?  // UNEC | UNN | ESUT | IMT | GODFREY (only if student) — feeds Campus Wars
+  quizCompleted Boolean  @default(false)
+  answers       QuizAnswer[]
+
+  // --- Attribution (from capture) ---
+  source    String?  // utm/campaign tag (auto): campus-wars, tiktok, instagram, etc.
+  heardFrom String?  // "How did you hear about us?" (self-reported): instagram, tiktok, whatsapp, friend, event, other
+
+  // --- Funnel / abandonment tracking (decision 2A) ---
+  // Highest stage the lead has reached. Lets us chart drop-off precisely,
+  // including WHICH quiz question loses people.
+  funnelStage    String   @default("CAPTURED") // CAPTURED | QUIZ_Q1..Q5 | COMPLETED | JOINED_WHATSAPP
+  lastQuizIndex  Int      @default(0)          // furthest quiz question reached (0-based)
+  events         FunnelEvent[]
+
+  // --- WhatsApp click tracking (decision 4A) ---
+  waClicks       Int      @default(0)
+  waFirstClickAt DateTime?
+  waLastClickAt  DateTime?
+
+  // --- Viral / referral graph (Creative Bounty) ---
+  referralCode String  @unique          // THIS lead's code to share
+  referredById String?                  // who referred them (Lead.id)
+  referredBy   Lead?   @relation("Referrals", fields: [referredById], references: [id])
+  referrals    Lead[]  @relation("Referrals")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([persona])
+  @@index([referredById])
+  @@index([campus])
+  @@index([funnelStage])
+  @@index([heardFrom])
+}
+
+// A timeline of funnel events per lead — powers the drop-off analytics and
+// gives a per-lead activity log. One row per meaningful step.
+model FunnelEvent {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  stage     String   // CAPTURED | QUIZ_Q1..Q5 | COMPLETED | WHATSAPP_CLICK
+  meta      String?  // optional detail (e.g. question key, answer)
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([stage])
+}
+
+// DB-backed, admin-editable configuration (decision 1A). Single key/value
+// store so new settings never need a migration. Env vars are fallbacks.
+model Setting {
+  key       String   @id // WHATSAPP_INVITE | BUILDER_CAP | SITE_URL | ...
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// One row per answered question. Keeping answers as rows (not columns)
+// means the quiz can change without a schema migration.
+model QuizAnswer {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  questionKey String   // e.g. "what_you_build"
+  answerValue String   // the selected option's value
+  createdAt   DateTime @default(now())
+
+  @@unique([leadId, questionKey]) // one answer per question per lead (idempotent updates)
+  @@index([leadId])
+}
