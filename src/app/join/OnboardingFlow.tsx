@@ -181,16 +181,31 @@ function QuizStep({
   }, [leadId, idx]);
 
   const q = QUIZ[idx];
-  const selected = answers[q.key];
+  // Multi answers are stored comma-joined; single answers are one value.
+  const raw = answers[q.key] ?? "";
+  const selectedSet = new Set(raw.split(",").filter(Boolean));
+  const hasAnswer = selectedSet.size > 0;
   const isLast = idx === QUIZ.length - 1;
-  const progress = Math.round(((idx + (selected ? 1 : 0)) / QUIZ.length) * 100);
+  const progress = Math.round(
+    ((idx + (hasAnswer ? 1 : 0)) / QUIZ.length) * 100,
+  );
 
   function choose(value: string) {
-    setAnswers((a) => ({ ...a, [q.key]: value }));
+    setAnswers((a) => {
+      if (!q.multi) return { ...a, [q.key]: value }; // single: replace
+      // multi: toggle membership, keep option order stable
+      const current = new Set((a[q.key] ?? "").split(",").filter(Boolean));
+      if (current.has(value)) current.delete(value);
+      else current.add(value);
+      const ordered = q.options
+        .map((o) => o.key)
+        .filter((k) => current.has(k));
+      return { ...a, [q.key]: ordered.join(",") };
+    });
   }
 
   async function next() {
-    if (!selected) return;
+    if (!hasAnswer) return;
     if (!isLast) {
       setIdx((i) => i + 1);
       return;
@@ -211,7 +226,11 @@ function QuizStep({
       </div>
 
       <span className="pill">{q.eyebrow}</span>
-      <h2 className="display display-md mt-5 mb-8">{q.prompt}</h2>
+      <h2 className="display display-md mt-5 mb-3">{q.prompt}</h2>
+      {q.multi && (
+        <p className="serial mb-6">Select all that apply.</p>
+      )}
+      {!q.multi && <div className="mb-6" />}
 
       <div className="space-y-3">
         {q.options.map((opt, i) => (
@@ -219,10 +238,17 @@ function QuizStep({
             key={opt.key}
             type="button"
             className="option"
-            data-selected={selected === opt.key}
+            data-selected={selectedSet.has(opt.key)}
+            aria-pressed={selectedSet.has(opt.key)}
             onClick={() => choose(opt.key)}
           >
-            <span className="option-key">{String.fromCharCode(65 + i)}</span>
+            <span className="option-key">
+              {q.multi
+                ? selectedSet.has(opt.key)
+                  ? "✓"
+                  : ""
+                : String.fromCharCode(65 + i)}
+            </span>
             <span>{opt.label}</span>
           </button>
         ))}
@@ -243,7 +269,7 @@ function QuizStep({
           type="button"
           className="btn btn-primary"
           onClick={next}
-          disabled={!selected || pending}
+          disabled={!hasAnswer || pending}
         >
           {pending ? "Locking you in…" : isLast ? "See where I fit →" : "Next →"}
         </button>

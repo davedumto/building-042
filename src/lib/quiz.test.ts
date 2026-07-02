@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   derivePersona,
   deriveCampus,
+  answerLabels,
   QUIZ,
   PERSONA_COPY,
   type Answers,
@@ -80,6 +81,34 @@ test("every derivable persona has presentation copy", () => {
     assert.ok(PERSONA_COPY[p].line.length > 0);
   }
 });
+// --- Multi-select (Q3 blocker, Q5 win) ---
+test("only blocker and win are multi-select; the rest are single", () => {
+  const multi = QUIZ.filter((q) => q.multi).map((q) => q.key).sort();
+  assert.deepEqual(multi, ["blocker", "win"]);
+});
+test("persona derivation ignores multi-value Q3/Q5 (stays correct)", () => {
+  // A lead who multi-selected blockers and wins still derives from Q1.
+  const a: Answers = {
+    what_you_build: "content",
+    stage: "inconsistent",
+    blocker: "visibility,clients,pricing",
+    student: "no",
+    win: "clients,network,recognition",
+  };
+  assert.equal(derivePersona(a), "CONTENT_CREATOR");
+  assert.equal(deriveCampus(a), null);
+});
+test("answerLabels renders a comma-joined multi answer as readable labels", () => {
+  const out = answerLabels("win", "clients,network");
+  assert.ok(out.includes("More clients"), "has first label");
+  assert.ok(out.includes("bigger, stronger network"), "has second label");
+  assert.ok(out.includes(","), "labels are comma-separated");
+});
+test("answerLabels handles a single value and unknown keys gracefully", () => {
+  assert.ok(answerLabels("blocker", "visibility").length > 0);
+  assert.equal(answerLabels("win", "bogus"), "bogus");
+});
+
 test("quiz has exactly 5 questions, each with >=2 options and unique keys", () => {
   assert.equal(QUIZ.length, 5);
   const keys = new Set<string>();

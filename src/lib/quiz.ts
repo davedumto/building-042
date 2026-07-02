@@ -28,6 +28,7 @@ export interface QuizQuestion {
   eyebrow: string; // small mono label above the question
   prompt: string; // the question, in the movement's voice
   options: QuizOption[];
+  multi?: boolean; // true = pick several (stored comma-joined). default single.
 }
 
 // The 5 questions. `key`s are stable identifiers; changing a label never
@@ -60,7 +61,8 @@ export const QUIZ: QuizQuestion[] = [
   {
     key: "blocker",
     eyebrow: "Question 03 / 05",
-    prompt: "What's the one thing holding you back?",
+    prompt: "What's holding you back?",
+    multi: true,
     options: [
       { key: "visibility", label: "Nobody knows I exist. Visibility" },
       { key: "clients", label: "Finding clients & closing sales" },
@@ -86,6 +88,7 @@ export const QUIZ: QuizQuestion[] = [
     key: "win",
     eyebrow: "Question 05 / 05",
     prompt: "What would make this worth it for you?",
+    multi: true,
     options: [
       { key: "clients", label: "More clients & real revenue" },
       { key: "network", label: "A bigger, stronger network" },
@@ -119,6 +122,17 @@ export function isValidHeardFrom(v: string | undefined): boolean {
 export function heardFromLabel(key: string | null | undefined): string {
   if (!key) return "·";
   return HEARD_FROM_OPTIONS.find((o) => o.key === key)?.label ?? key;
+}
+
+// Multi-select answers are stored comma-joined (e.g. "clients,network").
+// This turns a stored answerValue back into readable option labels for a
+// given question, for admin/CSV display.
+export function answerLabels(questionKey: string, value: string): string {
+  const q = QUIZ.find((x) => x.key === questionKey);
+  const keys = value.split(",").map((s) => s.trim()).filter(Boolean);
+  return keys
+    .map((k) => q?.options.find((o) => o.key === k)?.label ?? k)
+    .join(", ");
 }
 
 // --- Rule-based persona tagging (explicit, from Q1 + Q4) ---
