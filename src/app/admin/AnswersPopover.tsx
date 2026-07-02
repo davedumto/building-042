@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 export interface AnswerItem {
   prompt: string;
@@ -20,23 +20,19 @@ export default function AnswersPopover({
   items: AnswerItem[];
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
-    document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
+    // Prevent the page behind the modal from scrolling while it's open.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
     };
   }, [open]);
 
@@ -45,10 +41,10 @@ export default function AnswersPopover({
   }
 
   return (
-    <div className="relative inline-block" ref={ref}>
+    <>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(true)}
         className="text-green-deep font-medium hover:underline"
         aria-expanded={open}
       >
@@ -56,40 +52,44 @@ export default function AnswersPopover({
       </button>
 
       {open && (
-        <>
-          {/* dim backdrop */}
-          <div className="fixed inset-0 bg-ink/20 z-40" aria-hidden />
-          {/* card */}
+        // Fixed, full-screen overlay — escapes the table's overflow container
+        // entirely, so the card is never clipped. Click the backdrop to close.
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/30"
+          onClick={() => setOpen(false)}
+        >
           <div
             role="dialog"
+            aria-modal="true"
             aria-label={`Answers for ${name}`}
-            className="absolute right-0 z-50 mt-2 w-80 max-w-[85vw] rounded-2xl border border-line bg-white shadow-xl p-5 text-left whitespace-normal"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-line bg-white shadow-2xl p-6 text-left whitespace-normal"
           >
-            <div className="flex items-baseline justify-between mb-3">
-              <p className="font-[family-name:var(--font-display)] font-semibold">
+            <div className="flex items-baseline justify-between mb-1">
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold">
                 Builder No. {String(builderNo).padStart(4, "0")}
               </p>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-muted hover:text-ink text-lg leading-none"
+                className="text-muted hover:text-ink text-2xl leading-none"
                 aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <p className="serial mb-4">{name}</p>
-            <div className="space-y-3">
+            <p className="serial mb-5">{name}</p>
+            <div className="space-y-4">
               {items.map((it, i) => (
                 <div key={i}>
-                  <p className="serial">{it.prompt}</p>
+                  <p className="serial mb-0.5">{it.prompt}</p>
                   <p className="text-ink">{it.value}</p>
                 </div>
               ))}
             </div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
