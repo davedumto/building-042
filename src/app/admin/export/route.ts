@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAuthed } from "@/lib/auth";
 import { toCsv } from "@/lib/csv";
-import { heardFromLabel, PERSONA_COPY, type Persona } from "@/lib/quiz";
+import {
+  heardFromLabel,
+  answerLabels,
+  QUIZ,
+  PERSONA_COPY,
+  type Persona,
+} from "@/lib/quiz";
 import { STAGE_LABEL, type FunnelStage } from "@/lib/funnel";
 
 // Auth-guarded CSV export of ALL leads (the full field set, ignoring
@@ -17,6 +23,7 @@ export async function GET() {
     include: {
       _count: { select: { referrals: true } },
       referredBy: { select: { builderNo: true, referralCode: true } },
+      answers: { select: { questionKey: true, answerValue: true } },
     },
   });
 
@@ -39,28 +46,38 @@ export async function GET() {
     "Referrals Made",
     "Source",
     "Created At",
+    // One column per quiz question (header = the question prompt).
+    ...QUIZ.map((q) => q.prompt),
   ];
 
-  const rows = leads.map((l) => [
-    l.builderNo,
-    l.name,
-    l.whatsapp,
-    l.email,
-    l.persona ? PERSONA_COPY[l.persona as Persona]?.title ?? l.persona : "",
-    l.campus ?? "",
-    heardFromLabel(l.heardFrom),
-    STAGE_LABEL[l.funnelStage as FunnelStage] ?? l.funnelStage,
-    l.quizCompleted ? "Yes" : "No",
-    l.waClicks,
-    l.waFirstClickAt ? l.waFirstClickAt.toISOString() : "",
-    l.waLastClickAt ? l.waLastClickAt.toISOString() : "",
-    l.referralCode,
-    l.referredBy?.builderNo ?? "",
-    l.referredBy?.referralCode ?? "",
-    l._count.referrals,
-    l.source ?? "",
-    l.createdAt.toISOString(),
-  ]);
+  const rows = leads.map((l) => {
+    const byKey = new Map(l.answers.map((a) => [a.questionKey, a.answerValue]));
+    return [
+      l.builderNo,
+      l.name,
+      l.whatsapp,
+      l.email,
+      l.persona ? PERSONA_COPY[l.persona as Persona]?.title ?? l.persona : "",
+      l.campus ?? "",
+      heardFromLabel(l.heardFrom),
+      STAGE_LABEL[l.funnelStage as FunnelStage] ?? l.funnelStage,
+      l.quizCompleted ? "Yes" : "No",
+      l.waClicks,
+      l.waFirstClickAt ? l.waFirstClickAt.toISOString() : "",
+      l.waLastClickAt ? l.waLastClickAt.toISOString() : "",
+      l.referralCode,
+      l.referredBy?.builderNo ?? "",
+      l.referredBy?.referralCode ?? "",
+      l._count.referrals,
+      l.source ?? "",
+      l.createdAt.toISOString(),
+      // Readable answer labels per question (multi = comma-separated).
+      ...QUIZ.map((q) => {
+        const v = byKey.get(q.key);
+        return v ? answerLabels(q.key, v) : "";
+      }),
+    ];
+  });
 
   const csv = toCsv(headers, rows);
   // Build a dated filename. (Date is fine here — this is request-time, not a

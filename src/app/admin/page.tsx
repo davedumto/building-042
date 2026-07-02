@@ -2,7 +2,13 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { isAuthed } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
-import { PERSONA_COPY, heardFromLabel, type Persona } from "@/lib/quiz";
+import {
+  PERSONA_COPY,
+  heardFromLabel,
+  answerLabels,
+  QUIZ,
+  type Persona,
+} from "@/lib/quiz";
 import { FUNNEL_STAGES, STAGE_LABEL, stageRank } from "@/lib/funnel";
 import { logout } from "@/app/admin/actions";
 import SettingsForm from "./SettingsForm";
@@ -57,7 +63,10 @@ export default async function AdminPage({
   const page = Math.min(Math.max(1, Number.isFinite(pageParam) ? pageParam : 1), totalPages);
   const leads = await prisma.lead.findMany({
     orderBy: { builderNo: "asc" },
-    include: { _count: { select: { referrals: true } } },
+    include: {
+      _count: { select: { referrals: true } },
+      answers: { select: { questionKey: true, answerValue: true } },
+    },
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
@@ -233,11 +242,12 @@ export default async function AdminPage({
               <Th>WA clicks</Th>
               <Th>Refs</Th>
               <Th>Source</Th>
+              <Th>Answers</Th>
             </tr>
           </thead>
           <tbody>
             {leads.map((l) => (
-              <tr key={l.id} className="border-b border-line/60">
+              <tr key={l.id} className="border-b border-line/60 align-top">
                 <Td mono>{String(l.builderNo).padStart(4, "0")}</Td>
                 <Td>{l.name}</Td>
                 <Td mono>{l.whatsapp}</Td>
@@ -255,11 +265,14 @@ export default async function AdminPage({
                 <Td mono>{l.waClicks || "·"}</Td>
                 <Td mono>{l._count.referrals || "·"}</Td>
                 <Td>{l.source ?? "·"}</Td>
+                <Td>
+                  <AnswersCell answers={l.answers} />
+                </Td>
               </tr>
             ))}
             {leads.length === 0 && (
               <tr>
-                <td colSpan={11} className="text-center text-muted py-8">
+                <td colSpan={12} className="text-center text-muted py-8">
                   No builders yet. Share the link!
                 </td>
               </tr>
@@ -308,6 +321,40 @@ function PageLink({
     <a href={`/admin?page=${page}`} className="btn btn-ghost">
       {label}
     </a>
+  );
+}
+
+// Expandable per-lead quiz answers. Uses native <details> so it needs no
+// client JS (this page is a server component). Shows every answered question
+// with readable labels (multi-select answers are comma-separated).
+function AnswersCell({
+  answers,
+}: {
+  answers: { questionKey: string; answerValue: string }[];
+}) {
+  if (answers.length === 0) {
+    return <span className="text-muted">·</span>;
+  }
+  const byKey = new Map(answers.map((a) => [a.questionKey, a.answerValue]));
+  return (
+    <details className="group">
+      <summary className="cursor-pointer select-none text-green-deep font-medium list-none">
+        <span className="group-open:hidden">View {answers.length}</span>
+        <span className="hidden group-open:inline">Hide</span>
+      </summary>
+      <div className="mt-2 space-y-2 whitespace-normal max-w-xs">
+        {QUIZ.map((q) => {
+          const v = byKey.get(q.key);
+          if (!v) return null;
+          return (
+            <div key={q.key}>
+              <p className="serial">{q.prompt}</p>
+              <p className="text-ink">{answerLabels(q.key, v)}</p>
+            </div>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 
