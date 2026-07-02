@@ -12,6 +12,7 @@ import {
 import { FUNNEL_STAGES, STAGE_LABEL, stageRank } from "@/lib/funnel";
 import { logout } from "@/app/admin/actions";
 import SettingsForm from "./SettingsForm";
+import AnswersPopover from "./AnswersPopover";
 
 const PAGE_SIZE = 25;
 
@@ -266,7 +267,11 @@ export default async function AdminPage({
                 <Td mono>{l._count.referrals || "·"}</Td>
                 <Td>{l.source ?? "·"}</Td>
                 <Td>
-                  <AnswersCell answers={l.answers} />
+                  <AnswersPopover
+                    builderNo={l.builderNo}
+                    name={l.name}
+                    items={quizItems(l.answers)}
+                  />
                 </Td>
               </tr>
             ))}
@@ -324,38 +329,17 @@ function PageLink({
   );
 }
 
-// Expandable per-lead quiz answers. Uses native <details> so it needs no
-// client JS (this page is a server component). Shows every answered question
-// with readable labels (multi-select answers are comma-separated).
-function AnswersCell({
-  answers,
-}: {
-  answers: { questionKey: string; answerValue: string }[];
-}) {
-  if (answers.length === 0) {
-    return <span className="text-muted">·</span>;
-  }
+// Format a lead's stored answers into ordered { prompt, value } pairs with
+// readable labels (multi-select comma-joined). Runs on the server; the
+// popover client component just renders the result.
+function quizItems(
+  answers: { questionKey: string; answerValue: string }[],
+): { prompt: string; value: string }[] {
   const byKey = new Map(answers.map((a) => [a.questionKey, a.answerValue]));
-  return (
-    <details className="group">
-      <summary className="cursor-pointer select-none text-green-deep font-medium list-none">
-        <span className="group-open:hidden">View {answers.length}</span>
-        <span className="hidden group-open:inline">Hide</span>
-      </summary>
-      <div className="mt-2 space-y-2 whitespace-normal max-w-xs">
-        {QUIZ.map((q) => {
-          const v = byKey.get(q.key);
-          if (!v) return null;
-          return (
-            <div key={q.key}>
-              <p className="serial">{q.prompt}</p>
-              <p className="text-ink">{answerLabels(q.key, v)}</p>
-            </div>
-          );
-        })}
-      </div>
-    </details>
-  );
+  return QUIZ.flatMap((q) => {
+    const v = byKey.get(q.key);
+    return v ? [{ prompt: q.prompt, value: answerLabels(q.key, v) }] : [];
+  });
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
